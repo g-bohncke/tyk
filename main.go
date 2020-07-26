@@ -257,11 +257,11 @@ func syncAPISpecs() (int, error) {
 		apiSpecs = tmpSpecs
 
 		mainLog.Debug("Downloading API Configurations from Dashboard Service")
-	} else if config.Global().SlaveOptions.UseRPC {
+	} else if config.Global().SubordinateOptions.UseRPC {
 		mainLog.Debug("Using RPC Configuration")
 
 		var err error
-		apiSpecs, err = loader.FromRPC(config.Global().SlaveOptions.RPCKey)
+		apiSpecs, err = loader.FromRPC(config.Global().SubordinateOptions.RPCKey)
 		if err != nil {
 			return 0, err
 		}
@@ -304,7 +304,7 @@ func syncPolicies() (count int, err error) {
 		pols = LoadPoliciesFromDashboard(connStr, config.Global().NodeSecret, config.Global().Policies.AllowExplicitPolicyID)
 	case "rpc":
 		mainLog.Debug("Using Policies from RPC")
-		pols, err = LoadPoliciesFromRPC(config.Global().SlaveOptions.RPCKey)
+		pols, err = LoadPoliciesFromRPC(config.Global().SubordinateOptions.RPCKey)
 	default:
 		// this is the only case now where we need a policy record name
 		if config.Global().Policies.PolicyRecordName == "" {
@@ -398,7 +398,7 @@ func loadAPIEndpoints(muxer *mux.Router) {
 		r.HandleFunc("/oauth/refresh/{keyName}", invalidateOauthRefresh).Methods("DELETE")
 		r.HandleFunc("/cache/{apiID}", invalidateCacheHandler).Methods("DELETE")
 	} else {
-		mainLog.Info("Node is slaved, REST API minimised")
+		mainLog.Info("Node is subordinated, REST API minimised")
 	}
 
 	r.HandleFunc("/debug", traceHandler).Methods("POST")
@@ -880,16 +880,16 @@ func initialiseSystem() error {
 // afterConfSetup takes care of non-sensical config values (such as zero
 // timeouts) and sets up a few globals that depend on the config.
 func afterConfSetup(conf *config.Config) {
-	if conf.SlaveOptions.CallTimeout == 0 {
-		conf.SlaveOptions.CallTimeout = 30
+	if conf.SubordinateOptions.CallTimeout == 0 {
+		conf.SubordinateOptions.CallTimeout = 30
 	}
 
-	if conf.SlaveOptions.PingTimeout == 0 {
-		conf.SlaveOptions.PingTimeout = 60
+	if conf.SubordinateOptions.PingTimeout == 0 {
+		conf.SubordinateOptions.PingTimeout = 60
 	}
 
-	rpc.GlobalRPCPingTimeout = time.Second * time.Duration(conf.SlaveOptions.PingTimeout)
-	rpc.GlobalRPCCallTimeout = time.Second * time.Duration(conf.SlaveOptions.CallTimeout)
+	rpc.GlobalRPCPingTimeout = time.Second * time.Duration(conf.SubordinateOptions.PingTimeout)
+	rpc.GlobalRPCCallTimeout = time.Second * time.Duration(conf.SubordinateOptions.CallTimeout)
 	initGenericEventHandlers(conf)
 	regexp.ResetCache(time.Second*time.Duration(conf.RegexpCacheExpire), !conf.DisableRegexpCache)
 
@@ -914,7 +914,7 @@ func getHostDetails() {
 }
 
 func getGlobalStorageHandler(keyPrefix string, hashKeys bool) storage.Handler {
-	if config.Global().SlaveOptions.UseRPC {
+	if config.Global().SubordinateOptions.UseRPC {
 		return &RPCStorageHandler{
 			KeyPrefix: keyPrefix,
 			HashKeys:  hashKeys,
@@ -1111,7 +1111,7 @@ func start() {
 		go startPubSubLoop()
 	}
 
-	if slaveOptions := config.Global().SlaveOptions; slaveOptions.UseRPC {
+	if subordinateOptions := config.Global().SubordinateOptions; subordinateOptions.UseRPC {
 		mainLog.Debug("Starting RPC reload listener")
 		RPCListener = RPCStorageHandler{
 			KeyPrefix:        "rpc.listener.",
@@ -1119,9 +1119,9 @@ func start() {
 		}
 
 		RPCListener.Connect()
-		go rpcReloadLoop(slaveOptions.RPCKey)
+		go rpcReloadLoop(subordinateOptions.RPCKey)
 		go RPCListener.StartRPCKeepaliveWatcher()
-		go RPCListener.StartRPCLoopCheck(slaveOptions.RPCKey)
+		go RPCListener.StartRPCLoopCheck(subordinateOptions.RPCKey)
 	}
 
 	// 1s is the minimum amount of time between hot reloads. The
